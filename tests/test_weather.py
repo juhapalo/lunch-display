@@ -1,3 +1,4 @@
+import copy
 import unittest
 from urllib.parse import parse_qs, urlparse
 
@@ -47,10 +48,35 @@ class WeatherTest(unittest.TestCase):
         self.assertEqual(result["hours"], [])
         self.assertIsNone(result["today"])
 
+    def test_default_forecast_has_24_upcoming_hours(self):
+        data = copy.deepcopy(SAMPLE)
+        for key, values in data["hourly"].items():
+            values.extend(
+                ["2026-10-09T%02d:00" % h for h in range(24)]
+                if key == "time" else list(values)
+            )
+        for now, first, last in [
+            ("2026-10-08T10:15", "11:00", "10:00"),
+            ("2026-10-08T23:45", "00:00", "23:00"),
+        ]:
+            with self.subTest(now=now):
+                data["current"]["time"] = now
+                result = weather.parse_weather(data)
+                self.assertEqual(len(result["hours"]), 24)
+                self.assertEqual(result["hours"][0]["time"], first)
+                self.assertEqual(result["hours"][-1]["time"], last)
+
+    def test_short_forecast_returns_available_hours(self):
+        result = weather.parse_weather(SAMPLE)
+        self.assertEqual(len(result["hours"]), 13)
+        self.assertEqual(result["hours"][-1]["time"], "23:00")
+
     def test_build_url(self):
         query = parse_qs(urlparse(weather.build_url(60.29, 25.04, "Europe/Helsinki")).query)
         self.assertEqual(query["latitude"], ["60.29"])
         self.assertEqual(query["timezone"], ["Europe/Helsinki"])
+        self.assertEqual(query["forecast_days"], ["1"])
+        self.assertEqual(query["forecast_hours"], ["25"])
 
     def test_unknown_code(self):
         self.assertEqual(weather.describe(None), ("", ""))

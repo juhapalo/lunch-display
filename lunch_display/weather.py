@@ -57,7 +57,9 @@ def build_url(latitude, longitude, timezone):
         "hourly": "temperature_2m,weather_code,precipitation_probability",
         "daily": "weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset",
         "wind_speed_unit": "ms",
-        "forecast_days": 2,
+        "forecast_days": 1,
+        # Override the midnight cutoff: current hour plus 24 upcoming hours.
+        "forecast_hours": 25,
     }
     return API_URL + "?" + urlencode(params)
 
@@ -66,7 +68,7 @@ def _round(value):
     return None if value is None else int(round(value))
 
 
-def parse_weather(data, hours=8):
+def parse_weather(data, hours=24):
     """Turn an Open-Meteo response into a compact structure for the UI."""
     current = data.get("current", {})
     description, icon = describe(current.get("weather_code"))
