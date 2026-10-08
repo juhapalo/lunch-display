@@ -3,7 +3,8 @@
 Raspberry Pi 1B driven lunch display. Shows full screen (no browser frames,
 toolbars or mouse pointer):
 
-* **Vantaa weather** – current conditions, today's min/max and the next hours
+* **Vantaa weather** – current conditions, today's min/max and the next 24 hours
+  in two-hour steps (00:00, 02:00, etc.)
   (from the free [Open-Meteo](https://open-meteo.com/) API, no API key needed)
 * **Lunch menu** of
   * Flying Dylan
