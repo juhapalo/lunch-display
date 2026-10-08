@@ -149,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(status, json.dumps(payload, ensure_ascii=False), "application/json; charset=utf-8")
 
     def _file(self, name):
-        path = os.path.join(STATIC_DIR, name)
+        path = self.app.static_files[name]
         with open(path, "rb") as handle:
             body = handle.read()
         content_type = CONTENT_TYPES.get(os.path.splitext(name)[1], "application/octet-stream")
@@ -252,10 +252,12 @@ class App:
     def __init__(self, config, store=None):
         self.config = config
         self.store = store or DataStore(config)
-        self.static_files = set(
-            name for name in os.listdir(STATIC_DIR)
+        # Only these pre-scanned files are ever served (name -> path).
+        self.static_files = {
+            name: os.path.join(STATIC_DIR, name)
+            for name in os.listdir(STATIC_DIR)
             if os.path.splitext(name)[1] in CONTENT_TYPES
-        )
+        }
 
     def make_server(self, host=None, port=None):
         host = self.config.get("listen_host") if host is None else host
