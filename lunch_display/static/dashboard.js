@@ -3,6 +3,7 @@
 
   var DAYS = ["sunnuntai", "maanantai", "tiistai", "keskiviikko", "torstai", "perjantai", "lauantai"];
   var REFRESH_MS = 60000;
+  var clockOffset = null;
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
@@ -14,10 +15,26 @@
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
 
   function tickClock() {
-    var now = new Date();
-    document.getElementById("clock").textContent = pad(now.getHours()) + ":" + pad(now.getMinutes());
+    if (clockOffset === null) { return; }
+    var now = new Date(new Date().getTime() + clockOffset);
+    document.getElementById("clock").textContent = pad(now.getUTCHours()) + ":" + pad(now.getUTCMinutes());
     document.getElementById("date").textContent =
-      DAYS[now.getDay()] + " " + now.getDate() + "." + (now.getMonth() + 1) + "." + now.getFullYear();
+      DAYS[now.getUTCDay()] + " " + now.getUTCDate() + "." + (now.getUTCMonth() + 1) + "." + now.getUTCFullYear();
+  }
+
+  function syncClock(value) {
+    var parts = value && value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+    if (!parts) { return; }
+    clockOffset = Date.UTC(+parts[1], +parts[2] - 1, +parts[3], +parts[4], +parts[5], +parts[6]) -
+      new Date().getTime();
+    tickClock();
+  }
+
+  function menuDate(value) {
+    var parts = value && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!parts) { return ""; }
+    var date = new Date(Date.UTC(+parts[1], +parts[2] - 1, +parts[3]));
+    return "Lounas " + DAYS[date.getUTCDay()] + " " + (+parts[3]) + "." + (+parts[2]) + ".";
   }
 
   function temp(value) {
@@ -60,13 +77,14 @@
     }
   }
 
-  function renderMenus(menus) {
+  function renderMenus(menus, targetDate) {
     var container = document.getElementById("menus");
     container.innerHTML = "";
     for (var i = 0; i < menus.length; i++) {
       var menu = menus[i];
       var panel = el("section", "panel menu");
       panel.appendChild(el("h2", null, menu.name));
+      panel.appendChild(el("div", "menu-date", menuDate(targetDate)));
       if (menu.items && menu.items.length) {
         var ul = el("ul");
         for (var j = 0; j < menu.items.length; j++) {
@@ -89,7 +107,8 @@
       var data;
       try { data = JSON.parse(xhr.responseText); } catch (e) { return; }
       renderWeather(data.weather, data.weather_error);
-      renderMenus(data.menus || []);
+      syncClock(data.local_time);
+      renderMenus(data.menus || [], data.menus_date);
       var updated = data.updated ? new Date(data.updated * 1000) : null;
       document.getElementById("status").textContent = updated
         ? "Päivitetty " + pad(updated.getHours()) + ":" + pad(updated.getMinutes())
