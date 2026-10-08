@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lunch display – asetukset</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 900px; margin: 2em auto; padding: 0 1em; color: #222; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.4em; border-bottom: 1px solid #ddd; }
+  input[type=text], input[type=url] { width: 100%; box-sizing: border-box; }
+  input[type=number] { width: 6em; }
+  button { margin: 0.2em; }
+  #message { margin: 1em 0; font-weight: bold; }
+  .ok { color: #1a7f37; }
+  .fail { color: #cf222e; }
+  .hint { color: #555; font-size: 0.9em; }
+</style>
+</head>
+<body>
+<h1>Näytettävät sivut</h1>
+<p class="hint">
+  Sivut näytetään järjestyksessä, kukin annetun ajan (sekunteina).
+  <code>dashboard</code> on sää- ja lounasnäkymä. Muut osoitteet ovat
+  <code>http(s)://</code>-verkkosivuja. Huom: osa sivustoista estää
+  näyttämisen kehyksessä (X-Frame-Options), jolloin sivu jää tyhjäksi.
+</p>
+<table>
+  <thead><tr><th>Käytössä</th><th>Osoite</th><th>Aika (s)</th><th></th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<p>
+  <button id="add">+ Lisää sivu</button>
+  <button id="save">Tallenna</button>
+  <button id="refresh">Päivitä sää ja ruokalistat nyt</button>
+</p>
+<div id="message"></div>
+<script src="/static/admin.js"></script>
+</body>
+</html>

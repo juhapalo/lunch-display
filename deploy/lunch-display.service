@@ -1,0 +1,14 @@
+[Unit]
+Description=Lunch display server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@APP_DIR@
+ExecStart=/usr/bin/python3 -m lunch_display --config @APP_DIR@/config.json
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
