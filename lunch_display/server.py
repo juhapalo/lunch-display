@@ -10,6 +10,7 @@ import logging
 import os
 import threading
 import time
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -32,13 +33,22 @@ CONTENT_TYPES = {
 }
 
 
-def today_in(timezone):
-    try:
-        from zoneinfo import ZoneInfo
+def local_time(timezone, now=None):
+    return datetime.datetime.fromtimestamp(
+        time.time() if now is None else now, ZoneInfo(timezone))
 
-        return datetime.datetime.now(ZoneInfo(timezone)).date()
-    except Exception:
-        return datetime.date.today()
+
+def today_in(timezone):
+    return local_time(timezone).date()
+
+
+def menu_target_date(local):
+    day = local.date()
+    if local.hour >= 14 and day.weekday() < 5:
+        day += datetime.timedelta(days=1)
+    while day.weekday() >= 5:
+        day += datetime.timedelta(days=1)
+    return day
 
 
 class DataStore:
@@ -77,7 +87,7 @@ class DataStore:
         """Refresh whatever is stale. Returns True if something was updated."""
         now = time.time() if now is None else now
         location = self.config.get("location")
-        day = today_in(location.get("timezone", "Europe/Helsinki"))
+        day = menu_target_date(local_time(location.get("timezone", "Europe/Helsinki"), now))
         updated = False
 
         weather_age = now - self._weather_time
@@ -103,7 +113,7 @@ class DataStore:
                 except Exception as exc:
                     LOG.warning("Menu fetch failed for %s: %s", restaurant.get("name"), exc)
                     results.append({"name": restaurant.get("name", ""), "items": [],
-                                    "url": "", "error": "Ruokalistaa ei saatu haettua"})
+                                    "url": "", "error": menus.unavailable_message(day)})
             with self._lock:
                 self._menus = results
                 self._menus_date = day
@@ -216,7 +226,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(name)
         if path == "/api/data":
             payload = self.app.store.snapshot()
-            payload["date"] = today_in(self.app.config.get("location")["timezone"]).isoformat()
+            local = local_time(self.app.config.get("location")["timezone"])
+            payload["date"] = local.date().isoformat()
+            payload["local_time"] = local.replace(tzinfo=None).isoformat()
             return self._json(200, payload)
         if path == "/api/rotation":
             return self._json(200, {"rotation": self.app.config.get("rotation")})
@@ -251,6 +263,7 @@ class Handler(BaseHTTPRequestHandler):
 class App:
     def __init__(self, config, store=None):
         self.config = config
+        ZoneInfo(config.get("location")["timezone"])
         self.store = store or DataStore(config)
         # Only these pre-scanned files are ever served (name -> path).
         self.static_files = {

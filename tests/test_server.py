@@ -1,4 +1,5 @@
 import base64
+import datetime
 import http.client
 import json
 import os
@@ -7,7 +8,7 @@ import threading
 import unittest
 
 from lunch_display.config import Config, validate_rotation
-from lunch_display.server import App, DataStore
+from lunch_display.server import App, DataStore, local_time, menu_target_date
 
 TEST_PASSWORD = "unit" + "-test-" + "pw"
 
@@ -57,6 +58,19 @@ class ConfigTest(unittest.TestCase):
 
 
 class DataStoreTest(unittest.TestCase):
+    def test_cutoff_refreshes_even_when_not_stale(self):
+        fetched = []
+        store = DataStore(Config(None), lambda loc: {},
+                          lambda r, d: fetched.append(d) or {"items": []})
+        before = datetime.datetime(2026, 10, 8, 10, 59, tzinfo=datetime.timezone.utc).timestamp()
+        store.refresh(before)
+        self.assertEqual(store.snapshot()["menus_date"], "2026-10-08")
+        store.refresh(before + 60)
+        self.assertEqual(store.snapshot()["menus_date"], "2026-10-09")
+        self.assertEqual(fetched, [datetime.date(2026, 10, 8)] * 3 +
+                         [datetime.date(2026, 10, 9)] * 3)
+        self.assertFalse(store.refresh(before + 61))
+
     def test_refresh_and_errors(self):
         config = Config(None)
 
@@ -75,6 +89,50 @@ class DataStoreTest(unittest.TestCase):
         self.assertFalse(store.refresh(now=1001))  # nothing stale yet
         store.request_refresh()
         self.assertTrue(store.refresh(now=1002))
+
+
+class MenuTargetDateTest(unittest.TestCase):
+    def test_workdays_and_rollovers(self):
+        cases = [
+            ("2026-10-08T13:59", "2026-10-08"),
+            ("2026-10-08T14:00", "2026-10-09"),
+            ("2026-10-09T14:00", "2026-10-12"),
+            ("2026-10-10T09:00", "2026-10-12"),
+            ("2026-10-11T15:00", "2026-10-12"),
+            ("2026-10-30T14:00", "2026-11-02"),
+            ("2027-12-31T14:00", "2028-01-03"),
+        ]
+        for value, expected in cases:
+            with self.subTest(value=value):
+                local = datetime.datetime.fromisoformat(value).replace(
+                    tzinfo=datetime.timezone(datetime.timedelta(hours=3)))
+                self.assertEqual(menu_target_date(local).isoformat(), expected)
+
+    def test_helsinki_dst_independent_of_host_timezone(self):
+        cases = [("2026-03-27T11:59", 13, "2026-03-27"),
+                 ("2026-03-27T12:00", 14, "2026-03-30"),
+                 ("2026-03-30T11:00", 14, "2026-03-31"),
+                 ("2026-10-23T11:00", 14, "2026-10-26"),
+                 ("2026-10-26T11:59", 13, "2026-10-26"),
+                 ("2026-10-26T12:00", 14, "2026-10-27")]
+        for value, hour, expected in cases:
+            utc = datetime.datetime.fromisoformat(value).replace(tzinfo=datetime.timezone.utc)
+            local = local_time("Europe/Helsinki", utc.timestamp())
+            self.assertEqual(local.hour, hour)
+            self.assertEqual(menu_target_date(local).isoformat(), expected)
+        for value, offset in [("2026-03-29T00:59", 2), ("2026-03-29T01:00", 3),
+                              ("2026-10-25T00:59", 3), ("2026-10-25T01:00", 2)]:
+            utc = datetime.datetime.fromisoformat(value).replace(tzinfo=datetime.timezone.utc)
+            local = local_time("Europe/Helsinki", utc.timestamp())
+            self.assertEqual(local.utcoffset(), datetime.timedelta(hours=offset))
+        utc = datetime.datetime(2026, 10, 8, 11, tzinfo=datetime.timezone.utc).timestamp()
+        self.assertEqual(menu_target_date(local_time("UTC", utc)), datetime.date(2026, 10, 8))
+        self.assertEqual(menu_target_date(local_time("Europe/Helsinki", utc)),
+                         datetime.date(2026, 10, 9))
+
+    def test_invalid_timezone_is_not_silently_local(self):
+        with self.assertRaises(KeyError):
+            local_time("Invalid/Timezone", 0)
 
 
 class ServerTest(unittest.TestCase):
@@ -115,6 +173,8 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["weather"]["current"]["temperature"], 5)
         self.assertEqual(len(data["menus"]), 3)
+        self.assertEqual(data["date"], data["local_time"][:10])
+        self.assertIsNotNone(data["menus_date"])
 
         status, body = self.request(port, "GET", "/api/rotation")
         self.assertEqual(json.loads(body)["rotation"][0]["url"], "dashboard")

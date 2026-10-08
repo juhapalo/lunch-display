@@ -5,14 +5,14 @@ toolbars or mouse pointer):
 
 * **Vantaa weather** – current conditions, today's min/max and the next hours
   (from the free [Open-Meteo](https://open-meteo.com/) API, no API key needed)
-* **Today's lunch menu** of
+* **Lunch menu** of
   * Flying Dylan
   * Ravintola Factory Aviapolis
   * Huili Kehä 3 Vantaa
 * **Extra web pages** of your choice, shown one after another, each for an
   adjustable number of seconds.
 
-The server is plain Python 3 (standard library only – nothing to `pip install`),
+The server is plain Python 3.9+ (standard library only – nothing to `pip install`),
 so it runs comfortably on the single-core ARMv6 Pi 1B. The screen is drawn by
 the very light [surf](https://surf.suckless.org/) browser under
 `matchbox-window-manager`, which shows every window maximised with no title bar.
@@ -74,11 +74,34 @@ The browser then asks for a user name (anything) and that password.
 | `restaurants` | list of `{"name": ..., "urls": [...]}`; URLs are tried in order |
 | `rotation` | list of `{"url": ..., "duration": seconds, "enabled": true}` |
 
+Lunch menus show today on Monday–Friday before **14:00**, then switch to the
+next Monday–Friday date. Friday from 14:00 and weekends show the upcoming
+Monday. Working days here mean Monday–Friday; public holidays are **not**
+automatically excluded. The cutoff uses `location.timezone` (default
+`Europe/Helsinki`), including daylight saving time, not the Pi's local timezone.
+The server checks for target-date changes every 30 seconds regardless of
+`menu_refresh_minutes`; the dashboard polls every minute.
+Weather and the clock/calendar stay on today, while each lunch panel labels
+the fetched target date (also exposed as `menus_date` in `/api/data`).
+If that menu is not published, the panel reports it unavailable for that date
+instead of using an explicitly dated previous week's menu.
+
+Python's standard-library `zoneinfo` requires system timezone data (`tzdata`,
+normally included in Raspberry Pi OS). Invalid/missing timezone data is an
+error, never a silent fallback to the host timezone. If necessary, install it
+with `sudo apt-get install tzdata`.
+
 Lunch menus are read from the restaurants' web pages: the page is turned into
-text and today's section is picked from between the weekday headings
-("Torstai 8.10.", "TO 8.10.", "Thursday" …). If a restaurant changes its web
+text and the target section is picked from between the weekday headings
+("Torstaina 8.10.", "Torstai", "TO 8.10.", "Thursday" …).
+Dates, week numbers and date ranges are checked when provided; undated weekly
+menus without any week/date context are treated as recurring menus, so their
+freshness cannot be verified automatically. If a restaurant changes its web
 site, just point its `urls` to a page that lists the week's menu (for example
 the restaurant's page on lounaat.info).
+Existing `config.json` restaurant URL overrides are preserved. Flying Dylan's
+configured lounaat.info fallback uses the same improved parser; no URL
+migration or browser automation is required.
 
 ## Development
 
