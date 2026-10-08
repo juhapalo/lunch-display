@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lounas &amp; sää</title>
+<link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+<header>
+  <div id="date"></div>
+  <div id="clock"></div>
+</header>
+<main>
+  <section id="weather" class="panel">
+    <h2 id="weather-title">Sää</h2>
+    <div id="weather-now">
+      <span id="weather-icon"></span>
+      <span id="weather-temp">–</span>
+      <div id="weather-text"></div>
+    </div>
+    <div id="weather-today"></div>
+    <div id="weather-hours"></div>
+    <div id="weather-error" class="error"></div>
+  </section>
+  <section id="menus"></section>
+</main>
+<footer id="status"></footer>
+<script src="/static/dashboard.js"></script>
+</body>
+</html>

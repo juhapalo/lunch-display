@@ -1,0 +1,53 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #10151c;
+  color: #e8edf2;
+  font-family: "DejaVu Sans", "Noto Sans", Arial, sans-serif;
+  cursor: none;
+}
+body { display: flex; flex-direction: column; }
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 1.5vh 2vw;
+  background: #1b2430;
+}
+#date { font-size: 4vh; text-transform: capitalize; }
+#clock { font-size: 6vh; font-weight: bold; }
+main {
+  flex: 1;
+  display: flex;
+  gap: 1.5vw;
+  padding: 1.5vh 1.5vw;
+  min-height: 0;
+}
+.panel {
+  background: #1b2430;
+  border-radius: 1vh;
+  padding: 1.5vh 1.2vw;
+  overflow: hidden;
+}
+h2 {
+  margin: 0 0 1vh 0;
+  font-size: 3.2vh;
+  color: #ffcc66;
+}
+#weather { flex: 0 0 22%; display: flex; flex-direction: column; }
+#weather-now { text-align: center; }
+#weather-icon { font-size: 9vh; }
+#weather-temp { font-size: 9vh; font-weight: bold; margin-left: 1vw; }
+#weather-text { font-size: 2.6vh; margin-top: 0.5vh; }
+#weather-today { font-size: 2.4vh; text-align: center; margin: 1.5vh 0; color: #b8c4d0; }
+#weather-hours { font-size: 2.4vh; }
+.hour { display: flex; justify-content: space-between; padding: 0.4vh 0; border-top: 1px solid #2a3542; }
+.hour .rain { color: #7fb8ff; }
+#menus { flex: 1; display: flex; gap: 1.5vw; min-width: 0; }
+.menu { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.menu ul { list-style: none; margin: 0; padding: 0; font-size: 2.5vh; line-height: 1.3; }
+.menu li { padding: 0.6vh 0; border-top: 1px solid #2a3542; }
+.error { color: #ff8a80; font-size: 2.4vh; }
+footer { font-size: 1.6vh; color: #6b7a8a; padding: 0 2vw 1vh; text-align: right; }

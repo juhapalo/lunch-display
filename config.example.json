@@ -1,0 +1,46 @@
+{
+  "listen_host": "0.0.0.0",
+  "listen_port": 8080,
+  "admin_password": "",
+  "location": {
+    "name": "Vantaa",
+    "latitude": 60.2941,
+    "longitude": 25.041,
+    "timezone": "Europe/Helsinki"
+  },
+  "weather_refresh_minutes": 15,
+  "menu_refresh_minutes": 60,
+  "restaurants": [
+    {
+      "name": "Flying Dylan",
+      "urls": [
+        "https://www.dylan.fi/flyingdylan",
+        "https://www.lounaat.info/lounas/flying-dylan/vantaa"
+      ]
+    },
+    {
+      "name": "Ravintola Factory Aviapolis",
+      "urls": [
+        "https://ravintolafactory.com/lounasravintolat/ravintolat/factory-aviapolis/"
+      ]
+    },
+    {
+      "name": "Huili Kehä 3 Vantaa",
+      "urls": [
+        "https://huilipiste.fi/ravintola/huili-keha-3-vantaa/"
+      ]
+    }
+  ],
+  "rotation": [
+    {
+      "url": "dashboard",
+      "duration": 60,
+      "enabled": true
+    },
+    {
+      "url": "https://www.hsl.fi/",
+      "duration": 30,
+      "enabled": false
+    }
+  ]
+}
