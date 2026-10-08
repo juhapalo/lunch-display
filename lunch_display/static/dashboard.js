@@ -30,11 +30,17 @@
     tickClock();
   }
 
-  function menuDate(value) {
+  function menuDate(value, todayValue) {
     var parts = value && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!parts) { return ""; }
     var date = new Date(Date.UTC(+parts[1], +parts[2] - 1, +parts[3]));
-    return "Lounas " + DAYS[date.getUTCDay()] + " " + (+parts[3]) + "." + (+parts[2]) + ".";
+    var todayParts = todayValue && todayValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    var prefix = "Lounas ";
+    if (todayParts) {
+      var tomorrow = new Date(Date.UTC(+todayParts[1], +todayParts[2] - 1, +todayParts[3] + 1));
+      if (date.getTime() === tomorrow.getTime()) { prefix += "huomenna – "; }
+    }
+    return prefix + DAYS[date.getUTCDay()] + " " + (+parts[3]) + "." + (+parts[2]) + ".";
   }
 
   function temp(value) {
@@ -77,14 +83,14 @@
     }
   }
 
-  function renderMenus(menus, targetDate) {
+  function renderMenus(menus, targetDate, todayDate) {
     var container = document.getElementById("menus");
     container.innerHTML = "";
     for (var i = 0; i < menus.length; i++) {
       var menu = menus[i];
       var panel = el("section", "panel menu");
       panel.appendChild(el("h2", null, menu.name));
-      panel.appendChild(el("div", "menu-date", menuDate(targetDate)));
+      panel.appendChild(el("div", "menu-date", menuDate(targetDate, todayDate)));
       if (menu.items && menu.items.length) {
         var ul = el("ul");
         for (var j = 0; j < menu.items.length; j++) {
@@ -108,7 +114,7 @@
       try { data = JSON.parse(xhr.responseText); } catch (e) { return; }
       renderWeather(data.weather, data.weather_error);
       syncClock(data.local_time);
-      renderMenus(data.menus || [], data.menus_date);
+      renderMenus(data.menus || [], data.menus_date, data.date);
       var updated = data.updated ? new Date(data.updated * 1000) : null;
       document.getElementById("status").textContent = updated
         ? "Päivitetty " + pad(updated.getHours()) + ":" + pad(updated.getMinutes())
