@@ -68,8 +68,8 @@ def _round(value):
     return None if value is None else int(round(value))
 
 
-def parse_weather(data, hours=24):
-    """Turn an Open-Meteo response into a compact structure for the UI."""
+def parse_weather(data, hours=12):
+    """Return up to hours upcoming even-hour forecasts, plus current/daily data."""
     current = data.get("current", {})
     description, icon = describe(current.get("weather_code"))
     result = {
@@ -95,6 +95,8 @@ def parse_weather(data, hours=24):
     now_hour = now[:13]
     for index, stamp in enumerate(times):
         if stamp[:13] <= now_hour:
+            continue
+        if int(stamp[11:13]) % 2:
             continue
         desc, hour_icon = describe(codes[index] if index < len(codes) else None)
         result["hours"].append(
