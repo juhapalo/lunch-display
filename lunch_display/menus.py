@@ -183,6 +183,19 @@ def _week_matches(lines, index, headers, day):
         match = _RANGE_RE.search(line)
         if match:
             start, end = [_heading_date(value, day) for value in match.groups()]
+            if not start or not end:
+                return False
+            start_year = _DATE_RE.search(match.group(1)).group(3)
+            end_year = _DATE_RE.search(match.group(2)).group(3)
+            try:
+                if start_year and not end_year:
+                    end = end.replace(year=start.year + (end.month < start.month))
+                elif not start_year and end_year:
+                    start = start.replace(year=end.year - (start.month > end.month))
+                elif not start_year and not end_year:
+                    end = end.replace(year=start.year + (end.month < start.month))
+            except ValueError:
+                return False
             return bool(start and end and start <= day <= end)
         match = _WEEK_RE.search(line)
         if match:

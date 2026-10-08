@@ -126,6 +126,13 @@ class ExtractDayMenuTest(unittest.TestCase):
             ["New year food"])
         self.assertEqual(menus.extract_day_menu(
             ["Viikko 1 / 2025", "Torstai 1.1.", "Old food"], new_year), [])
+        for label in ("Lounas 5.10.2025–9.10.", "Lounas 5.10.–9.10.2027"):
+            self.assertEqual(menus.extract_day_menu(
+                [label, "Torstaina", "Old food"], THURSDAY), [])
+        for label in ("Lounas 29.12.2025–2.1.", "Lounas 29.12.–2.1.2026",
+                      "Lounas 29.12.–2.1."):
+            self.assertEqual(menus.extract_day_menu(
+                [label, "Torstai", "New year food"], new_year), ["New year food"])
 
     def test_picks_todays_section_not_navigation(self):
         items = menus.extract_day_menu(menus.html_to_lines(LOUNAAT_STYLE), THURSDAY)
