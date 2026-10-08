@@ -103,6 +103,11 @@ Existing `config.json` restaurant URL overrides are preserved. Flying Dylan's
 configured lounaat.info fallback uses the same improved parser; no URL
 migration or browser automation is required.
 
+## Updating the raspberry from main-repo
+cd ~/lunch-display
+git pull origin main
+sudo systemctl restart lunch-display
+
 ## Development
 
 Run locally (any computer with Python 3.9+):
