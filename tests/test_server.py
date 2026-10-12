@@ -136,12 +136,13 @@ class MenuTargetDateTest(unittest.TestCase):
 
 
 class ServerTest(unittest.TestCase):
-    def start(self, password=""):
+    def start(self, password="", frontend_browser_enabled=True):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         path = os.path.join(tmp.name, "config.json")
         with open(path, "w") as handle:
-            json.dump({"admin_password": password}, handle)
+            json.dump({"admin_password": password,
+                       "frontend_browser_enabled": frontend_browser_enabled}, handle)
         config = Config(path)
         store = DataStore(config, lambda loc: {"current": {"temperature": 5}},
                           lambda r, d: {"name": r["name"], "items": ["Ruoka"], "url": "", "error": None})
@@ -178,6 +179,15 @@ class ServerTest(unittest.TestCase):
 
         status, body = self.request(port, "GET", "/api/rotation")
         self.assertEqual(json.loads(body)["rotation"][0]["url"], "dashboard")
+
+    def test_browser_disabled_keeps_remote_routes_and_authentication(self):
+        port = self.start(TEST_PASSWORD, frontend_browser_enabled=False)
+        for path in ("/", "/dashboard", "/api/data", "/api/rotation"):
+            self.assertEqual(self.request(port, "GET", path)[0], 200, path)
+        self.assertEqual(self.request(port, "GET", "/admin")[0], 401)
+        good = "Basic " + base64.b64encode(b"admin:" + TEST_PASSWORD.encode()).decode()
+        self.assertEqual(self.request(port, "GET", "/admin",
+                                      headers={"Authorization": good})[0], 200)
 
     def test_update_rotation_locally(self):
         port = self.start()

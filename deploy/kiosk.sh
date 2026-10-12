@@ -6,6 +6,14 @@
 #   LUNCH_DISPLAY_URL      page to show (default http://localhost:8080/)
 #   LUNCH_DISPLAY_BROWSER  surf (default, lightest) or chromium / chromium-browser
 
+APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if ! FRONTEND_BROWSER_ENABLED="$(python3 "$APP_DIR/deploy/kiosk_config.py" browser-enabled)"; then
+    exit 1
+fi
+if [ "$FRONTEND_BROWSER_ENABLED" = "false" ]; then
+    exit 0
+fi
+
 URL="${LUNCH_DISPLAY_URL:-http://localhost:8080/}"
 BROWSER="${LUNCH_DISPLAY_BROWSER:-surf}"
 

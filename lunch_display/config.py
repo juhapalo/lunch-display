@@ -15,6 +15,7 @@ MAX_URL_LENGTH = 2000
 DEFAULT_CONFIG = {
     "listen_host": "0.0.0.0",
     "listen_port": 8080,
+    "frontend_browser_enabled": True,
     # When empty, the admin page can only be used from the Pi itself
     # (localhost). Set a password to allow editing from other machines.
     "admin_password": "",
@@ -74,6 +75,13 @@ def is_valid_page_url(url):
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
+def validate_frontend_browser_enabled(value):
+    """Accept only a JSON boolean, not truthy strings or numbers."""
+    if not isinstance(value, bool):
+        raise ValueError("frontend_browser_enabled must be a JSON boolean")
+    return value
+
+
 def validate_rotation(rotation):
     """Validate and normalise a rotation list.
 
@@ -124,6 +132,9 @@ class Config:
             if not isinstance(user, dict):
                 raise ValueError("%s must contain a JSON object" % path)
             self._data = _merge(DEFAULT_CONFIG, user)
+        self._data["frontend_browser_enabled"] = validate_frontend_browser_enabled(
+            self._data["frontend_browser_enabled"]
+        )
         self._data["rotation"] = validate_rotation(self._data.get("rotation", []))
 
     def get(self, key):

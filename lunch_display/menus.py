@@ -53,6 +53,11 @@ _CONTAINERS = {"div", "section", "article", "main", "table", "body"}
 _DATE_RE = re.compile(r"(?<!\d)(\d{1,2})\.\s*(\d{1,2})(?!\d)"
                       r"(?:\.\s*(\d{4}|\d{2})(?!\d)|\.?)(?!\d)")
 _PRICE_RE = re.compile(r"^\d+(?:[.,]\d{1,2})?\s*(?:€|eur|euroa)$", re.I)
+_DAILY_LUNCH_RE = re.compile(
+    r"^päivän lounas(?:\s+\d+(?:[.,]\d{1,2})?\s*(?:€|eur|euroa))?$", re.I)
+_HOURS_RE = re.compile(r"\b\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\b")
+_MENU_END_RE = re.compile(
+    r"^(?:katso koko viikon lounaslista|(?:\d+\s*k[bB]\s+)?lataa)\b", re.I)
 _WEEK_RE = re.compile(r"\b(?:viikko|vko|week)\s*(\d{1,2})"
                       r"(?:\s*[/, ]\s*(\d{4}))?\b", re.I)
 _RANGE_RE = re.compile(r"(\d{1,2}\.\s*\d{1,2}\.(?:\d{4})?)\s*[-–—]\s*"
@@ -233,8 +238,17 @@ def extract_day_menu(lines, day, max_items=MAX_ITEMS):
         end = headers[position + 1][0] if position + 1 < len(headers) else len(lines)
         end = _section_end(lines, index, end)
         items = []
+        daily_title_seen = False
         for line in lines[index + 1:end]:
             lowered = line.lower()
+            if _DAILY_LUNCH_RE.fullmatch(line):
+                # A daily-menu title is metadata, not the end of its dated menu.
+                if date is None or items or daily_title_seen:
+                    break
+                daily_title_seen = True
+                continue
+            if _HOURS_RE.search(line) or _MENU_END_RE.match(line):
+                break
             if getattr(line, "heading", False) or any(marker in lowered for marker in STOP_MARKERS):
                 break
             if len(line) < 2 or _PRICE_RE.fullmatch(line) or (items and items[-1] == line):
