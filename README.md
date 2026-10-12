@@ -41,6 +41,44 @@ To use Chromium instead of surf set `LUNCH_DISPLAY_BROWSER=chromium-browser`
 in `~/.bash_profile` before the kiosk start lines (Chromium is much heavier on
 a Pi 1B).
 
+### Use the Pi only as a VNC viewer (no local browser)
+
+Set the JSON boolean `"frontend_browser_enabled": false` in the repository's
+`config.json` (not the string `"false"`). The default is `true`, including when
+the key is absent in an older configuration.
+
+For an existing installation, after updating the repository:
+
+```sh
+cd ~/lunch-display
+# Edit config.json and set frontend_browser_enabled to false.
+./deploy/install.sh
+sudo systemctl restart lunch-display
+sudo reboot
+```
+
+Rerunning the installer migrates the original lunch-display kiosk block in
+`~/.bash_profile` to check the setting **before** starting X. Unrelated profile
+content is preserved. Restart the service after editing its configuration;
+reboot to stop an already-running local kiosk. Changing the setting does not
+terminate an active browser automatically. Later login/startup checks use the
+new value. A direct `deploy/kiosk.sh` invocation also checks it before doing
+anything with X or waiting for the server.
+
+For a fresh installation, copy `config.example.json` to `config.json` and set
+the flag before running the installer. When disabled, the installer skips
+X/browser packages and console auto-login setup; existing packages and
+auto-login settings are not removed. Startup reads `config.json` beside the
+repository, independent of the working directory. Invalid/unreadable startup
+configuration produces an error and does not launch the kiosk.
+
+The Python service and all HTTP routes remain available. On the remote machine
+whose desktop the Pi views over VNC, open `http://<pi-address>:8080/` for page
+rotation, or `http://<pi-address>:8080/dashboard` for just weather and lunch.
+The admin page remains at `/admin`, with the existing remote-password rules.
+Configure your VNC viewer separately: this project does not install or start a
+VNC server/viewer, and the disabled kiosk does not take over the tty session.
+
 ## Adding web pages / adjusting times
 
 Open the admin page `http://<pi-address>:8080/admin`:
@@ -69,6 +107,7 @@ The browser then asks for a user name (anything) and that password.
 | --- | --- |
 | `listen_host`, `listen_port` | address of the local server (default `0.0.0.0:8080`) |
 | `admin_password` | password for the admin page from other machines (empty = only localhost) |
+| `frontend_browser_enabled` | JSON boolean; start the Pi's local X/browser kiosk (default `true`); does not disable HTTP routes |
 | `location` | weather location name, coordinates and time zone (default Vantaa) |
 | `weather_refresh_minutes` | how often the weather is refreshed |
 | `menu_refresh_minutes` | how often the lunch menus are refreshed |
@@ -103,6 +142,22 @@ the restaurant's page on lounaat.info).
 Existing `config.json` restaurant URL overrides are preserved. Flying Dylan's
 configured lounaat.info fallback uses the same improved parser; no URL
 migration or browser automation is required.
+
+Huili's reported daily-page layout places a dated weekday before a separate
+“Päivän lounas 13.90 €” heading. Previously that heading ended extraction before
+the dishes. The parser now skips this title within a dated menu and stops at
+“Katso koko viikon lounaslista”/download labels; opening-hour time ranges are
+not menu items. Dietary markers are retained. The reported `perjantai 9.10.`
+section cannot supply food for Monday 12.10.2026 or another target date.
+
+Live-source limitation for this fix: direct retrieval of the official Huili
+URL failed with DNS resolution errors in the development environment, and the
+browser tool was unavailable. The offline fixture is a sanitized reconstruction
+of the previously inspected page's text order, with synthetic dishes, not a
+verified capture of current HTML. Regression tests reproduce the heading
+failure and exercise stale dates and menu boundaries. The weekly download URL,
+its format, and any embedded target-date data could not be independently
+verified, so no speculative fallback or new dependency was added.
 
 ## Updating the raspberry from main-repo
 cd ~/lunch-display

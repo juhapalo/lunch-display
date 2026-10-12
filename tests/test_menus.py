@@ -72,6 +72,50 @@ class HeaderWeekdayTest(unittest.TestCase):
 
 
 class ExtractDayMenuTest(unittest.TestCase):
+    def test_huili_daily_menu_and_unavailable_dates(self):
+        path = os.path.join(os.path.dirname(__file__), "fixtures", "huili.html")
+        with open(path, encoding="utf-8") as handle:
+            html = handle.read()
+        restaurant = {"name": "Huili", "urls": ["https://example.com/"]}
+        friday = datetime.date(2026, 10, 9)
+        result = menus.get_menu(restaurant, friday, fetch=lambda url: html)
+        self.assertEqual(result["items"], [
+            "Kasviskeitto (VE, G)", "Paahdettu kala, perunat (L, G)",
+        ])
+        self.assertIsNone(result["error"])
+        for day in (THURSDAY, datetime.date(2026, 10, 10),
+                    datetime.date(2026, 10, 12), datetime.date(2026, 10, 16),
+                    datetime.date(2027, 10, 9)):
+            with self.subTest(day=day):
+                result = menus.get_menu(restaurant, day, fetch=lambda url: html)
+                self.assertEqual(result["items"], [])
+                self.assertEqual(result["error"], menus.unavailable_message(day))
+
+    def test_opening_hours_are_not_menu_sections(self):
+        for header in ("Ma:", "Maanantai", "Maanantai 12.10."):
+            html = "<section><p>%s</p><p>05:30-21:00</p><p>Avoinna</p></section>" % header
+            self.assertEqual(menus.extract_day_menu(menus.html_to_lines(html),
+                                                   datetime.date(2026, 10, 12)), [])
+
+    def test_daily_lunch_title_requires_a_date_and_precedes_food(self):
+        friday = datetime.date(2026, 10, 9)
+        for title in ("Päivän lounas 13.90 €", "Päivän lounas", "Päivän lounas 13,90 EUR"):
+            html = ("<section><h3>perjantai 9.10.</h3><h2>%s</h2>"
+                    "<p>Keitto (L)</p><h2>%s</h2><p>Ei ruokaa</p></section>") % (title, title)
+            self.assertEqual(menus.extract_day_menu(menus.html_to_lines(html), friday),
+                             ["Keitto (L)"])
+        html = "<section><p>Perjantai</p><h2>Päivän lounas</h2><p>Ruoka</p></section>"
+        self.assertEqual(menus.extract_day_menu(menus.html_to_lines(html), friday), [])
+
+    def test_daily_menu_stops_at_download_labels_without_heading_tags(self):
+        for label in ("Katso koko viikon lounaslista", "Lataa", "36 kb Lataa"):
+            html = ("<section><p>perjantai 9.10.</p><p>Päivän lounas 13.90 €</p>"
+                    "<p>13.90 €</p><p>Keitto (L, G)</p><p>%s</p>"
+                    "<p>Mainosteksti</p><p>Evästeet</p></section>") % label
+            self.assertEqual(menus.extract_day_menu(menus.html_to_lines(html),
+                                                   datetime.date(2026, 10, 9)),
+                             ["Keitto (L, G)"])
+
     def test_reconstructed_inflected_listing_and_final_section(self):
         path = os.path.join(os.path.dirname(__file__), "fixtures", "flying_dylan.html")
         with open(path, encoding="utf-8") as handle:
@@ -165,6 +209,14 @@ class ExtractDayMenuTest(unittest.TestCase):
 
 
 class GetMenuTest(unittest.TestCase):
+    def test_configured_factory_table_menu(self):
+        from lunch_display.config import Config
+
+        restaurant = Config(None).get("restaurants")[1]
+        result = menus.get_menu(restaurant, THURSDAY, fetch=lambda url: TABLE_STYLE)
+        self.assertEqual(result["items"], ["Broileria", "Kasvispata"])
+        self.assertIsNone(result["error"])
+
     def test_configured_flying_dylan_fallback(self):
         from lunch_display.config import Config
 
