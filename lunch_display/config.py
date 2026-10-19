@@ -11,11 +11,18 @@ MIN_DURATION = 5
 MAX_DURATION = 24 * 60 * 60
 MAX_ROTATION_ITEMS = 50
 MAX_URL_LENGTH = 2000
+MIN_REFRESH = 30
+DEFAULT_VNC_PORT = 5900
 
 DEFAULT_CONFIG = {
     "listen_host": "0.0.0.0",
     "listen_port": 8080,
     "frontend_browser_enabled": True,
+    # x11vnc server sharing the kiosk display. It only starts once
+    # vnc_password is set.
+    "vnc_enabled": True,
+    "vnc_port": DEFAULT_VNC_PORT,
+    "vnc_password": "",
     # When empty, the admin page can only be used from the Pi itself
     # (localhost). Set a password to allow editing from other machines.
     "admin_password": "",
@@ -49,7 +56,8 @@ DEFAULT_CONFIG = {
         },
     ],
     # Pages shown in sequential order. "dashboard" is the built-in
-    # weather + lunch view, anything else is an http(s) URL.
+    # weather + lunch view, anything else is an http(s) URL. An optional
+    # "refresh" (seconds, 0 = never) periodically reloads the page.
     "rotation": [
         {"url": DASHBOARD, "duration": 60},
     ],
@@ -80,6 +88,24 @@ def validate_frontend_browser_enabled(value):
     if not isinstance(value, bool):
         raise ValueError("frontend_browser_enabled must be a JSON boolean")
     return value
+
+
+def validate_vnc_settings(enabled, port, password):
+    """Validate the VNC server settings; returns them unchanged."""
+    if not isinstance(enabled, bool):
+        raise ValueError("vnc_enabled must be a JSON boolean")
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise ValueError("vnc_port must be an integer between 1 and 65535")
+    # x11vnc reads the password from the first line of a password file where
+    # "#" comments out a line and "__" starts special tokens.
+    if (not isinstance(password, str)
+            or any(not "!" <= char <= "~" for char in password)
+            or password.startswith("#") or "__" in password):
+        raise ValueError(
+            "vnc_password must be printable ASCII without spaces, must not "
+            "start with '#' and must not contain '__'"
+        )
+    return enabled, port, password
 
 
 def validate_rotation(rotation):
@@ -114,8 +140,25 @@ def validate_rotation(rotation):
                 "item %d: duration must be between %d and %d seconds"
                 % (index + 1, MIN_DURATION, MAX_DURATION)
             )
+        refresh = item.get("refresh", 0)
+        if refresh is None or refresh == "":
+            refresh = 0
+        if isinstance(refresh, bool):
+            raise ValueError("item %d: refresh must be a number" % (index + 1))
+        try:
+            refresh = int(refresh)
+        except (TypeError, ValueError):
+            raise ValueError("item %d: refresh must be a number" % (index + 1))
+        if refresh != 0 and not MIN_REFRESH <= refresh <= MAX_DURATION:
+            raise ValueError(
+                "item %d: refresh must be 0 (never) or between %d and %d seconds"
+                % (index + 1, MIN_REFRESH, MAX_DURATION)
+            )
         enabled = item.get("enabled", True)
-        cleaned.append({"url": url, "duration": duration, "enabled": bool(enabled)})
+        entry = {"url": url, "duration": duration, "enabled": bool(enabled)}
+        if refresh:
+            entry["refresh"] = refresh
+        cleaned.append(entry)
     return cleaned
 
 
@@ -134,6 +177,9 @@ class Config:
             self._data = _merge(DEFAULT_CONFIG, user)
         self._data["frontend_browser_enabled"] = validate_frontend_browser_enabled(
             self._data["frontend_browser_enabled"]
+        )
+        validate_vnc_settings(
+            self._data["vnc_enabled"], self._data["vnc_port"], self._data["vnc_password"]
         )
         self._data["rotation"] = validate_rotation(self._data.get("rotation", []))
 

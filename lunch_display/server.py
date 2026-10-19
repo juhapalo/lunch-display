@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from . import menus, weather
 from .config import Config
+from .tabs import TabRotator
 
 LOG = logging.getLogger("lunch_display")
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -287,6 +288,8 @@ def main(argv=None):
                         help="path to config.json (created/updated by the admin page)")
     parser.add_argument("--host", help="override listen_host")
     parser.add_argument("--port", type=int, help="override listen_port")
+    parser.add_argument("--no-tabs", action="store_true",
+                        help="do not control the kiosk Chromium tabs over DevTools")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -296,6 +299,9 @@ def main(argv=None):
     server = app.make_server(args.host, args.port)
     threading.Thread(target=app.store.run_forever, daemon=True).start()
     host, port = server.server_address[:2]
+    if app.config.get("frontend_browser_enabled") and not args.no_tabs:
+        rotator = TabRotator(app.config, "http://localhost:%d" % port)
+        threading.Thread(target=rotator.run_forever, daemon=True).start()
     LOG.info("Serving on http://%s:%s/ (admin: /admin)", host, port)
     try:
         server.serve_forever()
