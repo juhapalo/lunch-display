@@ -7,7 +7,7 @@ import tempfile
 import threading
 import unittest
 
-from lunch_display.config import Config, validate_rotation
+from lunch_display.config import Config, validate_rotation, validate_vnc_settings
 from lunch_display.server import App, DataStore, local_time, menu_target_date
 
 TEST_PASSWORD = "unit" + "-test-" + "pw"
@@ -23,6 +23,33 @@ class ValidateRotationTest(unittest.TestCase):
             {"url": "dashboard", "duration": 60, "enabled": True},
             {"url": "https://example.com/x", "duration": 30, "enabled": False},
         ])
+
+    def test_refresh(self):
+        result = validate_rotation([
+            {"url": "dashboard", "duration": 60, "refresh": 0},
+            {"url": "https://example.com/", "duration": 30, "refresh": "600"},
+            {"url": "https://example.org/", "duration": 30, "refresh": None},
+        ])
+        self.assertEqual(result, [
+            {"url": "dashboard", "duration": 60, "enabled": True},
+            {"url": "https://example.com/", "duration": 30, "enabled": True, "refresh": 600},
+            {"url": "https://example.org/", "duration": 30, "enabled": True},
+        ])
+        for refresh in (5, -1, "abc", True, [], 10 ** 9):
+            with self.assertRaises(ValueError, msg=repr(refresh)):
+                validate_rotation([{"url": "dashboard", "duration": 60, "refresh": refresh}])
+
+    def test_vnc_settings(self):
+        self.assertEqual(validate_vnc_settings(True, 5900, ""), (True, 5900, ""))
+        self.assertEqual(validate_vnc_settings(False, 1, "p@ss!w0rd"), (False, 1, "p@ss!w0rd"))
+        for args in (
+            ("true", 5900, ""), (True, "5900", ""), (True, 0, ""), (True, 65536, ""),
+            (True, True, ""), (True, 5900, None), (True, 5900, "a b"),
+            (True, 5900, "line\nbreak"), (True, 5900, "#x"), (True, 5900, "x__EMPTY__"),
+            (True, 5900, "pässi"),
+        ):
+            with self.assertRaises(ValueError, msg=repr(args)):
+                validate_vnc_settings(*args)
 
     def test_invalid(self):
         bad = [
@@ -55,6 +82,14 @@ class ConfigTest(unittest.TestCase):
             reloaded = Config(path)
             self.assertEqual(reloaded.get("rotation")[0]["url"], "https://example.com")
             self.assertEqual(reloaded.get("listen_port"), 9000)
+            self.assertEqual(reloaded.get("vnc_port"), 5900)
+            self.assertIs(reloaded.get("vnc_enabled"), True)
+            self.assertEqual(reloaded.get("vnc_password"), "")
+
+            with open(path, "w") as handle:
+                json.dump({"vnc_port": "abc"}, handle)
+            with self.assertRaisesRegex(ValueError, "vnc_port"):
+                Config(path)
 
 
 class DataStoreTest(unittest.TestCase):

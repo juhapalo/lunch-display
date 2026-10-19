@@ -2,6 +2,9 @@
   "listen_host": "0.0.0.0",
   "listen_port": 8080,
   "frontend_browser_enabled": true,
+  "vnc_enabled": true,
+  "vnc_port": 5900,
+  "vnc_password": "",
   "admin_password": "",
   "location": {
     "name": "Vantaa",
@@ -41,7 +44,8 @@
     {
       "url": "https://www.hsl.fi/",
       "duration": 30,
-      "enabled": false
+      "enabled": false,
+      "refresh": 600
     }
   ]
 }

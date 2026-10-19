@@ -1,0 +1,18 @@
+[Unit]
+Description=Lunch display VNC server (x11vnc)
+After=network-online.target lunch-display.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+User=@USER@
+WorkingDirectory=@APP_DIR@
+ExecStart=/bin/sh @APP_DIR@/deploy/vnc.sh
+RuntimeDirectory=lunch-display-vnc
+RuntimeDirectoryMode=0700
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=78
+
+[Install]
+WantedBy=multi-user.target

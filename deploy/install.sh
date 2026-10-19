@@ -13,15 +13,25 @@ if [ ! -e "$APP_DIR/config.json" ] && [ ! -L "$APP_DIR/config.json" ]; then
 fi
 
 FRONTEND_BROWSER_ENABLED="$(python3 "$APP_DIR/deploy/kiosk_config.py" browser-enabled)"
+VNC_ENABLED="$(python3 "$APP_DIR/deploy/kiosk_config.py" vnc-enabled)"
 
 echo "Installing packages..."
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends python3 curl
 if [ "$FRONTEND_BROWSER_ENABLED" = "true" ]; then
+    # Raspberry Pi OS ships Chromium as chromium-browser, Debian as chromium.
+    if apt-cache show chromium-browser >/dev/null 2>&1; then
+        CHROMIUM_PACKAGE=chromium-browser
+    else
+        CHROMIUM_PACKAGE=chromium
+    fi
     sudo apt-get install -y --no-install-recommends \
         xserver-xorg xinit x11-xserver-utils \
-        matchbox-window-manager unclutter surf \
+        matchbox-window-manager unclutter "$CHROMIUM_PACKAGE" \
         fonts-dejavu-core fonts-noto-color-emoji
+fi
+if [ "$VNC_ENABLED" = "true" ]; then
+    sudo apt-get install -y --no-install-recommends x11vnc
 fi
 
 echo "Installing systemd service..."
@@ -29,6 +39,19 @@ sed -e "s|@APP_DIR@|$APP_DIR|g" -e "s|@USER@|$RUN_USER|g" \
     "$APP_DIR/deploy/lunch-display.service" | sudo tee /etc/systemd/system/lunch-display.service >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable --now lunch-display.service
+
+if [ "$VNC_ENABLED" = "true" ]; then
+    echo "Installing VNC server service..."
+    chmod +x "$APP_DIR/deploy/vnc.sh"
+    sed -e "s|@APP_DIR@|$APP_DIR|g" -e "s|@USER@|$RUN_USER|g" \
+        "$APP_DIR/deploy/lunch-display-vnc.service" | sudo tee /etc/systemd/system/lunch-display-vnc.service >/dev/null
+    sudo systemctl daemon-reload
+    sudo systemctl enable lunch-display-vnc.service
+    sudo systemctl restart lunch-display-vnc.service
+elif [ -e /etc/systemd/system/lunch-display-vnc.service ]; then
+    echo "VNC server disabled; stopping it."
+    sudo systemctl disable --now lunch-display-vnc.service
+fi
 
 if [ "$FRONTEND_BROWSER_ENABLED" = "true" ]; then
     echo "Enabling console auto-login and kiosk start..."

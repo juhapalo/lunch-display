@@ -22,11 +22,15 @@
 <p class="hint">
   Sivut näytetään järjestyksessä, kukin annetun ajan (sekunteina).
   <code>dashboard</code> on sää- ja lounasnäkymä. Muut osoitteet ovat
-  <code>http(s)://</code>-verkkosivuja. Huom: osa sivustoista estää
-  näyttämisen kehyksessä (X-Frame-Options), jolloin sivu jää tyhjäksi.
+  <code>http(s)://</code>-verkkosivuja. Jokainen sivu ladataan kerran omaan
+  välilehteensä, eikä sitä ladata uudelleen sivunvaihdossa.
+  <em>Päivitys</em> lataa sivun uudelleen annetun ajan välein
+  (sekunteina, vähintään 30; 0 = ei koskaan).
+  Huom: osoitteessa <code>/</code> sivut näytetään kehyksissä, ja osa
+  sivustoista estää sen (X-Frame-Options), jolloin sivu jää siellä tyhjäksi.
 </p>
 <table>
-  <thead><tr><th>Käytössä</th><th>Osoite</th><th>Aika (s)</th><th></th></tr></thead>
+  <thead><tr><th>Käytössä</th><th>Osoite</th><th>Aika (s)</th><th>Päivitys (s)</th><th></th></tr></thead>
   <tbody id="rows"></tbody>
 </table>
 <p>

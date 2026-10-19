@@ -48,6 +48,15 @@
     duration.value = item.duration || 30;
     durationTd.appendChild(duration);
 
+    var refreshTd = document.createElement("td");
+    var refresh = document.createElement("input");
+    refresh.type = "number";
+    refresh.className = "refresh";
+    refresh.min = 0;
+    refresh.title = "0 = ei koskaan, muuten vähintään 30 s";
+    refresh.value = item.refresh || 0;
+    refreshTd.appendChild(refresh);
+
     var actionsTd = document.createElement("td");
     var buttons = [
       ["↑", function () { if (tr.previousSibling) { rows.insertBefore(tr, tr.previousSibling); } }],
@@ -64,6 +73,7 @@
     tr.appendChild(enabledTd);
     tr.appendChild(urlTd);
     tr.appendChild(durationTd);
+    tr.appendChild(refreshTd);
     tr.appendChild(actionsTd);
     rows.appendChild(tr);
   }
@@ -75,6 +85,7 @@
       result.push({
         url: trs[i].querySelector(".url").value.trim(),
         duration: parseInt(trs[i].querySelector(".duration").value, 10),
+        refresh: parseInt(trs[i].querySelector(".refresh").value, 10) || 0,
         enabled: trs[i].querySelector(".enabled").checked
       });
     }

@@ -1,14 +1,18 @@
 /* Shows the configured pages one after another, each for its own duration.
- * The next page is loaded into a hidden iframe and swapped in once it has
- * loaded, so the screen never shows a blank page while loading. */
+ * Every page is loaded once into its own iframe that stays alive; a page
+ * change only switches which iframe is visible, so pages are not reloaded at
+ * every page change. Pages with a "refresh" interval (seconds) are reloaded
+ * periodically, while hidden when other pages exist.
+ * (The Pi's Chromium kiosk does the same with real tabs, see tabs.py.) */
 (function () {
   "use strict";
 
   var DEFAULT_ROTATION = [{ url: "dashboard", duration: 60, enabled: true }];
-  var LOAD_TIMEOUT_MS = 15000;
+  var REFRESH_CHECK_MS = 5000;
 
-  var frames = [document.getElementById("frame-a"), document.getElementById("frame-b")];
-  var active = 0;
+  var container = document.getElementById("frames");
+  var frames = {};    // resolved url -> { el: iframe, loaded: ms }
+  var refresh = {};   // resolved url -> refresh interval in seconds
   var rotation = DEFAULT_ROTATION;
   var position = -1;
   var currentUrl = null;
@@ -40,30 +44,72 @@
     return url === "dashboard" ? "/dashboard" : url;
   }
 
-  function show(url, done) {
-    // Keep a single page on screen if nothing else is configured.
-    if (url === currentUrl && rotation.length === 1) { done(); return; }
-    var next = frames[1 - active];
-    var finished = false;
-    var swap = function () {
-      if (finished) { return; }
-      finished = true;
-      clearTimeout(timer);
-      next.className = "active";
-      frames[active].className = "";
-      var old = frames[active];
-      active = 1 - active;
-      currentUrl = url;
-      // Free memory used by the previous page (important on a Pi 1B).
-      setTimeout(function () { old.src = "about:blank"; }, 1000);
-      done();
-    };
-    var timer = setTimeout(swap, LOAD_TIMEOUT_MS);
-    next.onload = function () {
-      if (next.getAttribute("data-url") === url) { swap(); }
-    };
-    next.setAttribute("data-url", url);
-    next.src = url;
+  function frameCount() {
+    var count = 0;
+    for (var url in frames) {
+      if (Object.prototype.hasOwnProperty.call(frames, url)) { count++; }
+    }
+    return count;
+  }
+
+  // Create an iframe for every new page and remove the ones no longer used.
+  function sync(items) {
+    var wanted = {};
+    var intervals = {};
+    var url, i;
+    for (i = 0; i < items.length; i++) {
+      url = resolveUrl(items[i].url);
+      wanted[url] = true;
+      var seconds = parseInt(items[i].refresh, 10) || 0;
+      if (seconds > 0 && (!intervals[url] || seconds < intervals[url])) { intervals[url] = seconds; }
+    }
+    refresh = intervals;
+    for (url in frames) {
+      if (Object.prototype.hasOwnProperty.call(frames, url) && !wanted[url]) {
+        container.removeChild(frames[url].el);
+        delete frames[url];
+      }
+    }
+    for (url in wanted) {
+      if (Object.prototype.hasOwnProperty.call(wanted, url) && !frames[url]) {
+        var el = document.createElement("iframe");
+        el.title = "page";
+        el.src = url;
+        container.appendChild(el);
+        frames[url] = { el: el, loaded: Date.now() };
+      }
+    }
+  }
+
+  function show(url) {
+    for (var key in frames) {
+      if (Object.prototype.hasOwnProperty.call(frames, key)) {
+        frames[key].el.className = key === url ? "active" : "";
+      }
+    }
+    currentUrl = url;
+  }
+
+  function refreshDue() {
+    var now = Date.now();
+    var count = frameCount();
+    for (var url in frames) {
+      if (!Object.prototype.hasOwnProperty.call(frames, url)) { continue; }
+      var seconds = refresh[url];
+      var entry = frames[url];
+      if (!seconds || now - entry.loaded < seconds * 1000) { continue; }
+      // Reload hidden pages only, so nobody sees the page reloading.
+      if (url === currentUrl && count > 1) { continue; }
+      entry.loaded = now;
+      reload(entry.el, url);
+    }
+  }
+
+  // Going through about:blank also reloads URLs with a #fragment (and
+  // cross-origin frames, whose location cannot be reloaded directly).
+  function reload(el, url) {
+    el.src = "about:blank";
+    setTimeout(function () { el.src = url; }, 100);
   }
 
   function step() {
@@ -79,10 +125,11 @@
     position = (position + 1) % rotation.length;
     var item = rotation[position];
     var duration = Math.max(5, parseInt(item.duration, 10) || 60) * 1000;
-    show(resolveUrl(item.url), function () {
-      setTimeout(step, duration);
-    });
+    sync(rotation);
+    show(resolveUrl(item.url));
+    setTimeout(step, duration);
   }
 
+  setInterval(refreshDue, REFRESH_CHECK_MS);
   step();
 })();

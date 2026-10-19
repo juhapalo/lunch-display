@@ -47,7 +47,7 @@ class DeployTest(unittest.TestCase):
         for name in (
             "sudo", "raspi-config", "tty", "startx", "xset", "unclutter",
             "matchbox-window-manager", "curl", "surf", "chromium",
-            "chromium-browser", "sleep",
+            "chromium-browser", "sleep", "apt-cache", "x11vnc",
         ):
             script = self.bin / name
             script.write_text(
@@ -60,6 +60,7 @@ class DeployTest(unittest.TestCase):
                 '    tty) printf "%s\\n" "$TEST_TTY" ;;\n'
                 '    sudo) if [ "$1" = "tee" ]; then cat >/dev/null; fi ;;\n'
                 '    sleep) kill -TERM "$PPID" ;;\n'
+                '    apt-cache) exit "${TEST_APT_CACHE_STATUS:-0}" ;;\n'
                 'esac\n',
                 encoding="utf-8",
             )
@@ -84,6 +85,11 @@ class DeployTest(unittest.TestCase):
 
     def kiosk(self):
         return self.run_command(["sh", str(self.app / "deploy" / "kiosk.sh")])
+
+    def vnc(self):
+        self.env["RUNTIME_DIRECTORY"] = str(self.root / "run")
+        (self.root / "run").mkdir(mode=0o700, exist_ok=True)
+        return self.run_command(["sh", str(self.app / "deploy" / "vnc.sh")])
 
     def commands(self):
         return self.log.read_text(encoding="utf-8") if self.log.exists() else ""
@@ -169,10 +175,12 @@ class DeployTest(unittest.TestCase):
         for data, browser in (
             ({}, "surf"), ({"frontend_browser_enabled": True}, "chromium"),
             ({"frontend_browser_enabled": True}, "chromium-browser"),
+            ({}, ""),
         ):
             with self.subTest(data=data, browser=browser):
                 self.config(data)
                 self.env["LUNCH_DISPLAY_BROWSER"] = browser
+                browser = browser or "chromium-browser"
                 self.env["LUNCH_DISPLAY_URL"] = "http://localhost:9090/custom"
                 self.log.unlink(missing_ok=True)
                 result = self.kiosk()
@@ -186,7 +194,47 @@ class DeployTest(unittest.TestCase):
                 self.assertIn(browser + " <", commands)
                 self.assertIn("<http://localhost:9090/custom>", commands)
                 if browser != "surf":
-                    self.assertIn("<--kiosk>", commands)
+                    for flag in (
+                        "--kiosk", "--noerrdialogs", "--disable-infobars",
+                        "--disable-session-crashed-bubble",
+                        "--check-for-update-interval=31536000",
+                        "--remote-debugging-port=9222",
+                    ):
+                        self.assertIn("<%s>" % flag, commands)
+                    self.assertNotIn("<--incognito>", commands)
+
+    def test_kiosk_default_urls_and_extra_flags(self):
+        self.config({})
+        for browser, url in (
+            ("", "http://localhost:8080/dashboard"), ("surf", "http://localhost:8080/"),
+        ):
+            with self.subTest(browser=browser):
+                self.env["LUNCH_DISPLAY_BROWSER"] = browser
+                self.env["LUNCH_DISPLAY_CHROMIUM_FLAGS"] = "--extra-one --extra-two"
+                self.log.unlink(missing_ok=True)
+                result = self.kiosk()
+                self.assertEqual(result.returncode, -15, result.stderr)
+                commands = self.commands()
+                self.assertIn("curl <-fs> <-o> </dev/null> <%s>" % url, commands)
+                browser_line = [line for line in commands.splitlines()
+                                if line.startswith((browser or "chromium-browser") + " <")][0]
+                self.assertTrue(browser_line.endswith("<%s>" % url))
+                if browser == "surf":
+                    self.assertNotIn("--extra-one", commands)
+                else:
+                    self.assertIn("<--extra-one> <--extra-two>", browser_line)
+
+    def test_kiosk_clears_crashed_profile_state(self):
+        self.config({})
+        preferences = self.home / ".config" / "lunch-display-chromium" / "Default" / "Preferences"
+        preferences.parent.mkdir(parents=True)
+        preferences.write_text('{"profile":{"exit_type":"Crashed","exited_cleanly":false}}')
+        result = self.kiosk()
+        self.assertEqual(result.returncode, -15, result.stderr)
+        self.assertEqual(
+            preferences.read_text(),
+            '{"profile":{"exit_type":"Normal","exited_cleanly":true}}',
+        )
 
     def test_disabled_fresh_install_only_installs_service(self):
         self.config({"frontend_browser_enabled": False})
@@ -195,7 +243,8 @@ class DeployTest(unittest.TestCase):
         commands = self.commands()
         self.assertIn("sudo <apt-get> <install> <-y> <--no-install-recommends> <python3> <curl>", commands)
         self.assertIn("sudo <systemctl> <enable> <--now> <lunch-display.service>", commands)
-        for package in ("xserver", "xinit", "matchbox", "surf", "unclutter", "fonts-"):
+        for package in ("xserver", "xinit", "matchbox", "chromium", "unclutter",
+                        "fonts-", "x11vnc", "lunch-display-vnc"):
             self.assertNotIn(package, commands)
         self.assertNotIn("raspi-config", commands)
         self.assertFalse(self.profile.exists())
@@ -244,7 +293,12 @@ class DeployTest(unittest.TestCase):
         self.assertIs(json.loads((self.app / "config.json").read_text())["frontend_browser_enabled"], True)
         commands = self.commands()
         self.assertIn("<xserver-xorg> <xinit> <x11-xserver-utils>", commands)
-        self.assertIn("<matchbox-window-manager> <unclutter> <surf>", commands)
+        self.assertIn("<matchbox-window-manager> <unclutter> <chromium-browser>", commands)
+        self.assertNotIn("surf", commands)
+        self.assertIn("sudo <apt-get> <install> <-y> <--no-install-recommends> <x11vnc>", commands)
+        self.assertIn("sudo <tee> </etc/systemd/system/lunch-display-vnc.service>", commands)
+        self.assertIn("sudo <systemctl> <enable> <lunch-display-vnc.service>", commands)
+        self.assertIn("vnc_password is empty", result.stderr)
         self.assertIn("sudo <raspi-config> <nonint> <do_boot_behaviour> <B2>", commands)
         content = self.profile.read_text()
         self.assertTrue(content.startswith("export UNRELATED=kept\n"))
@@ -255,6 +309,76 @@ class DeployTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("continued:", result.stdout)
         self.assertIn("startx", self.commands())
+
+    def test_install_chromium_package_name_and_vnc_disabled(self):
+        self.config({"vnc_enabled": False})
+        self.env["TEST_APT_CACHE_STATUS"] = "100"
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = self.commands()
+        self.assertIn("<unclutter> <chromium> <fonts-dejavu-core>", commands)
+        self.assertNotIn("x11vnc", commands)
+        self.assertNotIn("sudo <tee> </etc/systemd/system/lunch-display-vnc.service>", commands)
+        self.assertNotIn("vnc_password is empty", result.stderr)
+
+    def test_vnc_service_template(self):
+        unit = (ROOT / "deploy" / "lunch-display-vnc.service").read_text()
+        self.assertIn("ExecStart=/bin/sh @APP_DIR@/deploy/vnc.sh", unit)
+        self.assertIn("User=@USER@", unit)
+        self.assertIn("RuntimeDirectoryMode=0700", unit)
+        self.assertIn("RestartPreventExitStatus=78", unit)
+        self.assertIn("WantedBy=multi-user.target", unit)
+
+    def test_vnc_starts_x11vnc_with_password_file(self):
+        secret = "Vnc-" + "pass1"
+        self.config({"vnc_port": 5901, "vnc_password": secret})
+        result = self.vnc()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = self.commands()
+        password_file = self.root / "run" / "vnc-password"
+        self.assertIn(
+            "x11vnc <-display> <:0> <-auth> <%s/.Xauthority> <-forever> <-shared> "
+            "<-rfbport> <5901> <-passwdfile> <rm:%s>" % (self.home, password_file),
+            commands,
+        )
+        self.assertNotIn(secret, commands)
+        self.assertEqual(password_file.read_text(), secret + "\n")
+        self.assertEqual(password_file.stat().st_mode & 0o777, 0o600)
+        # A stale file is replaced on the next start.
+        self.config({"vnc_password": "other"})
+        self.assertEqual(self.vnc().returncode, 0)
+        self.assertEqual(password_file.read_text(), "other\n")
+        self.assertIn("<-rfbport> <5900>", self.commands())
+
+    def test_vnc_requires_private_runtime_directory(self):
+        self.config({"vnc_password": "secret"})
+        self.env.pop("RUNTIME_DIRECTORY", None)
+        self.env.pop("XDG_RUNTIME_DIR", None)
+        result = self.run_command(["sh", str(self.app / "deploy" / "vnc.sh")])
+        self.assertEqual(result.returncode, 78)
+        self.assertIn("RUNTIME_DIRECTORY", result.stderr)
+        self.assertEqual(self.commands(), "")
+
+    def test_vnc_disabled_or_without_password_does_not_start(self):
+        for data, status in (
+            ({"vnc_enabled": False, "vnc_password": "secret"}, 0),
+            ({"frontend_browser_enabled": False, "vnc_password": "secret"}, 0),
+            ({}, 78),
+            ({"vnc_password": "two words"}, 78),
+            ({"vnc_password": "#comment"}, 78),
+            ({"vnc_password": "a__SKIP__"}, 78),
+            ({"vnc_password": "secret", "vnc_port": 0}, 78),
+            ({"vnc_password": "secret", "vnc_port": "5900"}, 78),
+            ({"vnc_enabled": "true", "vnc_password": "secret"}, 78),
+        ):
+            with self.subTest(data=data):
+                self.config(data)
+                result = self.vnc()
+                self.assertEqual(result.returncode, status, result.stderr)
+                self.assertNotIn("x11vnc", self.commands())
+                self.assertFalse((self.root / "run" / "vnc-password").exists())
+                if status:
+                    self.assertIn("lunch-display kiosk:", result.stderr)
 
     def test_exact_legacy_migration_preserves_other_marker_sections(self):
         unrelated = (
