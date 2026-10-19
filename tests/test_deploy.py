@@ -350,6 +350,15 @@ class DeployTest(unittest.TestCase):
         self.assertEqual(password_file.read_text(), "other\n")
         self.assertIn("<-rfbport> <5900>", self.commands())
 
+    def test_vnc_requires_private_runtime_directory(self):
+        self.config({"vnc_password": "secret"})
+        self.env.pop("RUNTIME_DIRECTORY", None)
+        self.env.pop("XDG_RUNTIME_DIR", None)
+        result = self.run_command(["sh", str(self.app / "deploy" / "vnc.sh")])
+        self.assertEqual(result.returncode, 78)
+        self.assertIn("RUNTIME_DIRECTORY", result.stderr)
+        self.assertEqual(self.commands(), "")
+
     def test_vnc_disabled_or_without_password_does_not_start(self):
         for data, status in (
             ({"vnc_enabled": False, "vnc_password": "secret"}, 0),

@@ -53,6 +53,7 @@
     refresh.type = "number";
     refresh.className = "refresh";
     refresh.min = 0;
+    refresh.title = "0 = ei koskaan, muuten vähintään 30 s";
     refresh.value = item.refresh || 0;
     refreshTd.appendChild(refresh);
 

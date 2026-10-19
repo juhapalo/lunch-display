@@ -101,8 +101,15 @@
       // Reload hidden pages only, so nobody sees the page reloading.
       if (url === currentUrl && count > 1) { continue; }
       entry.loaded = now;
-      entry.el.src = url;
+      reload(entry.el, url);
     }
+  }
+
+  // Going through about:blank also reloads URLs with a #fragment (and
+  // cross-origin frames, whose location cannot be reloaded directly).
+  function reload(el, url) {
+    el.src = "about:blank";
+    setTimeout(function () { el.src = url; }, 100);
   }
 
   function step() {
